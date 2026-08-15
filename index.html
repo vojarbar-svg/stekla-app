@@ -841,15 +841,15 @@ function renderSalary(){
       <td>${s.count || '—'}</td>
       <td>${s.revenue || '—'}</td>
       <td>${s.m1Base || '—'}</td>
-      <td><input type="number" class="bonus-input" data-date="${iso}" data-master="m1" value="${b1||''}" placeholder="0"></td>
-      <td>${s.m1Base + b1 || '—'}</td>
+      <td><input type="number" inputmode="numeric" class="bonus-input" data-date="${iso}" data-master="m1" value="${b1||''}" placeholder="0"></td>
+      <td id="tot-${iso}-m1">${s.m1Base + b1 || '—'}</td>
       <td>${s.m2Base || '—'}</td>
-      <td><input type="number" class="bonus-input" data-date="${iso}" data-master="m2" value="${b2||''}" placeholder="0"></td>
-      <td>${s.m2Base + b2 || '—'}</td>`;
+      <td><input type="number" inputmode="numeric" class="bonus-input" data-date="${iso}" data-master="m2" value="${b2||''}" placeholder="0"></td>
+      <td id="tot-${iso}-m2">${s.m2Base + b2 || '—'}</td>`;
     tbody.appendChild(tr);
   }
 
-  tfoot.innerHTML = `<tr><td>Итого</td><td>${wkInstalls}</td><td>${wkRevenue}</td><td>${wkM1Base}</td><td>${wkM1Bonus}</td><td>${wkM1Base+wkM1Bonus}</td><td>${wkM2Base}</td><td>${wkM2Bonus}</td><td>${wkM2Base+wkM2Bonus}</td></tr>`;
+  tfoot.innerHTML = `<tr><td>Итого</td><td>${wkInstalls}</td><td>${wkRevenue}</td><td>${wkM1Base}</td><td id="foot-m1bonus">${wkM1Bonus}</td><td id="foot-m1total">${wkM1Base+wkM1Bonus}</td><td>${wkM2Base}</td><td id="foot-m2bonus">${wkM2Bonus}</td><td id="foot-m2total">${wkM2Base+wkM2Bonus}</td></tr>`;
 
   document.getElementById('m1-total').innerHTML = `${wkM1Base+wkM1Bonus} <span>руб</span>`;
   document.getElementById('m2-total').innerHTML = `${wkM2Base+wkM2Bonus} <span>руб</span>`;
@@ -867,9 +867,49 @@ function renderSalary(){
       if(val === 0) delete bonuses[iso+':'+m];
       else bonuses[iso+':'+m] = val;
       persistBonuses();
-      renderSalary();
+      updateSalaryTotals();
     });
   });
+}
+
+/* Пересчитывает и точечно обновляет только цифры итогов, не трогая поля ввода (чтобы не терять фокус при вводе) */
+function updateSalaryTotals(){
+  const monday = getWeekMonday(salaryWeekOffset);
+  let wkM1Base=0, wkM2Base=0, wkM1Bonus=0, wkM2Bonus=0;
+
+  for(let i=0;i<7;i++){
+    const d = new Date(monday);
+    d.setDate(monday.getDate()+i);
+    const iso = toISODate(d);
+    const dayBookings = bookings.filter(x => x.date === iso);
+    const s = calcDaySalary(dayBookings);
+    const b1 = Number(bonuses[iso+':m1']) || 0;
+    const b2 = Number(bonuses[iso+':m2']) || 0;
+
+    wkM1Base += s.m1Base; wkM2Base += s.m2Base;
+    wkM1Bonus += b1; wkM2Bonus += b2;
+
+    const c1 = document.getElementById(`tot-${iso}-m1`);
+    const c2 = document.getElementById(`tot-${iso}-m2`);
+    if(c1) c1.textContent = (s.m1Base + b1) || '—';
+    if(c2) c2.textContent = (s.m2Base + b2) || '—';
+  }
+
+  const fb1 = document.getElementById('foot-m1bonus');
+  const ft1 = document.getElementById('foot-m1total');
+  const fb2 = document.getElementById('foot-m2bonus');
+  const ft2 = document.getElementById('foot-m2total');
+  if(fb1) fb1.textContent = wkM1Bonus;
+  if(ft1) ft1.textContent = wkM1Base + wkM1Bonus;
+  if(fb2) fb2.textContent = wkM2Bonus;
+  if(ft2) ft2.textContent = wkM2Base + wkM2Bonus;
+
+  document.getElementById('m1-total').innerHTML = `${wkM1Base+wkM1Bonus} <span>руб</span>`;
+  document.getElementById('m2-total').innerHTML = `${wkM2Base+wkM2Bonus} <span>руб</span>`;
+  document.getElementById('m1-breakdown').innerHTML =
+    `Ставка за неделю: ${wkM1Base} руб<br>Бонусы за неделю: +${wkM1Bonus} руб`;
+  document.getElementById('m2-breakdown').innerHTML =
+    `Ставка за неделю: ${wkM2Base} руб<br>Бонусы за неделю: +${wkM2Bonus} руб`;
 }
 
 /* ---------- CSV export ---------- */
