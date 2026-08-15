@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stekla-uchet-v1';
+const CACHE_NAME = 'stekla-uchet-v2';
 const ASSETS = [
   './index.html',
   './manifest.json',
@@ -22,15 +22,14 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+/* Network-first: всегда пытаемся получить свежую версию с сервера.
+   К кэшу обращаемся только если сети нет (офлайн-режим). */
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request).then((resp) => {
-        return caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, resp.clone());
-          return resp;
-        });
-      }).catch(() => cached);
-    })
+    fetch(event.request).then((resp) => {
+      const copy = resp.clone();
+      caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+      return resp;
+    }).catch(() => caches.match(event.request))
   );
 });
