@@ -315,11 +315,6 @@
   .net-card .nlabel{font-size:11px; text-transform:uppercase; color:var(--text-dim); letter-spacing:.04em;}
   .net-card .nval{font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:700; color:var(--green); margin-top:4px;}
 
-  /* Склад: бейдж наличия (используется в карточке записи) */
-  .wh-badge{font-size:10px; text-transform:uppercase; letter-spacing:.04em; padding:3px 9px; border-radius:20px; font-family:'IBM Plex Mono',monospace; display:inline-flex; align-items:center; gap:4px; white-space:nowrap;}
-  .wh-badge.own{background:rgba(79,174,106,.16); color:var(--green);}
-  .wh-badge.available{background:rgba(90,163,224,.16); color:var(--blue);}
-
   .backup-row{display:flex; gap:8px; margin-top:8px;}
   .backup-row button{flex:1; background:var(--surface-2); border:1px solid var(--line); color:var(--text); padding:9px; border-radius:9px; font-size:12px; cursor:pointer; font-family:'Inter',sans-serif;}
 </style>
@@ -446,26 +441,18 @@
         <label><span class="ic">🔎</span>Еврокод стекла</label>
         <input type="text" id="f-euro" placeholder="8556" required>
       </div>
-      <div class="field-row">
-        <div class="field required">
-          <label><span class="ic">📦</span>Склад</label>
-          <select id="f-wh" required>
-            <option value="">— выбрать —</option>
-            <option>Мобик</option>
-            <option>Ботаника</option>
-            <option>Иванко</option>
-            <option>КМК</option>
-            <option>Овер</option>
-            <option>Шатик</option>
-          </select>
-        </div>
-        <div class="field required">
-          <label><span class="ic">🏷️</span>Наличие</label>
-          <select id="f-wh-status" required>
-            <option value="own">🏠 Своё</option>
-            <option value="available">🚚 Есть у поставщика</option>
-          </select>
-        </div>
+      <div class="field required">
+        <label><span class="ic">📦</span>Склад</label>
+        <select id="f-wh" required>
+          <option value="">— выбрать —</option>
+          <option>Мобик</option>
+          <option>Ботаника</option>
+          <option>Иванко</option>
+          <option>КМК</option>
+          <option>Овер</option>
+          <option>Шатик</option>
+          <option>Есть стекло</option>
+        </select>
       </div>
       <div class="field-row">
         <div class="field required mono">
@@ -788,7 +775,6 @@ function renderList(){
       <div class="tags">
         <span class="tag euro">🔎 ${escapeHtml(b.euro)}</span>
         <span class="tag wh">📦 ${escapeHtml(b.wh)}</span>
-        ${b.whStatus ? `<span class="wh-badge ${b.whStatus==='own'?'own':'available'}">${b.whStatus==='own'?'🏠 Своё':'🚚 Есть'}</span>` : ''}
       </div>
       <div class="row-bottom">
         <div class="phone">📞 <a href="tel:${escapeHtml((b.phoneCode||'')+(b.phoneNum||''))}">${escapeHtml((b.phoneCode||''))} ${escapeHtml(b.phoneNum||'')}</a></div>
@@ -828,7 +814,6 @@ function openSheet(b){
   document.getElementById('f-car').value = b ? b.car : '';
   document.getElementById('f-euro').value = b ? b.euro : '';
   document.getElementById('f-wh').value = b ? b.wh : '';
-  document.getElementById('f-wh-status').value = b ? (b.whStatus||'own') : 'own';
   document.getElementById('f-phone-code').value = b ? (b.phoneCode||'') : '';
   document.getElementById('f-phone-num').value = b ? (b.phoneNum||'') : '';
   document.getElementById('f-buy').value = b ? (b.buy||'') : '';
@@ -896,7 +881,6 @@ document.getElementById('form').onsubmit = async (e) => {
   const car = document.getElementById('f-car').value.trim();
   const euro = document.getElementById('f-euro').value.trim();
   const wh = document.getElementById('f-wh').value;
-  const whStatus = document.getElementById('f-wh-status').value;
 
   if(!phoneCode || !phoneNum || !date || !time || !post || !car || !euro || !wh){
     document.getElementById('form-err').classList.add('show');
@@ -907,7 +891,7 @@ document.getElementById('form').onsubmit = async (e) => {
     id: editingId || (Date.now().toString(36) + Math.random().toString(36).slice(2,7)),
     date, time,
     post,
-    car, euro, wh, whStatus, phoneCode, phoneNum,
+    car, euro, wh, phoneCode, phoneNum,
     buy: document.getElementById('f-buy').value,
     sell: document.getElementById('f-sell').value,
     status: document.getElementById('f-status').value
@@ -1048,21 +1032,20 @@ function renderSalary(){
   renderNet();
 }
 
-/* ---------- Прогноз ---------- */
+/* ---------- Прогноз (по текущему календарному месяцу) ---------- */
 function renderForecast(){
   const box = document.getElementById('forecast-row');
   if(!box) return;
-  if(salaryWeekOffset !== 0){
-    box.innerHTML = ''; // прогноз показываем только для текущей недели
-    return;
-  }
-  const monday = getWeekMonday(0);
-  const todayISO = toISODate(new Date());
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayNum = now.getDate();
+
   let daysPassed = 0, profitSoFar = 0, salarySoFar = 0;
-  for(let i=0;i<7;i++){
-    const d = new Date(monday); d.setDate(monday.getDate()+i);
-    const iso = toISODate(d);
-    if(iso > todayISO) continue;
+  for(let day = 1; day <= todayNum; day++){
+    const iso = toISODate(new Date(year, month, day));
     daysPassed++;
     const s = calcDaySalary(bookings.filter(x=>x.date===iso));
     const b1 = Number(bonuses[iso+':m1'])||0;
@@ -1071,18 +1054,18 @@ function renderForecast(){
     salarySoFar += (s.m1Base+b1) + (s.m2Base+b2);
   }
   if(daysPassed === 0) daysPassed = 1;
-  const forecastProfit = Math.round((profitSoFar / daysPassed) * 7);
-  const forecastSalary = Math.round((salarySoFar / daysPassed) * 7);
+  const forecastProfit = Math.round((profitSoFar / daysPassed) * daysInMonth);
+  const forecastSalary = Math.round((salarySoFar / daysPassed) * daysInMonth);
   box.innerHTML = `
     <div class="forecast-card">
-      <div class="flabel">📈 Прогноз прибыли (неделя)</div>
+      <div class="flabel">📈 Прогноз прибыли (месяц)</div>
       <div class="fval">${forecastProfit} руб</div>
-      <div class="fhint">по среднему за ${daysPassed} дн.</div>
+      <div class="fhint">по среднему за ${daysPassed} из ${daysInMonth} дн.</div>
     </div>
     <div class="forecast-card">
-      <div class="flabel">💼 Прогноз ЗП (М1+М2)</div>
+      <div class="flabel">💼 Прогноз ЗП (М1+М2, месяц)</div>
       <div class="fval">${forecastSalary} руб</div>
-      <div class="fhint">по среднему за ${daysPassed} дн.</div>
+      <div class="fhint">по среднему за ${daysPassed} из ${daysInMonth} дн.</div>
     </div>`;
 }
 
