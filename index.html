@@ -11,6 +11,8 @@
 <meta name="apple-mobile-web-app-title" content="Стёкла.Учёт">
 <meta name="theme-color" content="#1a1c20">
 <meta name="mobile-web-app-capable" content="yes">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
 
@@ -271,6 +273,55 @@
     padding:11px; border-radius:10px; font-size:13px; cursor:pointer; margin-top:14px;
     font-family:'Inter',sans-serif; font-weight:600;
   }
+
+  /* Раскраска колонок мастеров в таблице зарплаты */
+  table.daily td.m1-col, table.daily th.m1-col{background:rgba(90,163,224,.10);}
+  table.daily td.m2-col, table.daily th.m2-col{background:rgba(168,121,224,.10);}
+  table.daily th.m1-col{color:var(--blue);}
+  table.daily th.m2-col{color:#a879e0;}
+
+  /* Усиленная раскраска карточек записи по статусу */
+  .card.status-order{background:linear-gradient(180deg, rgba(224,85,90,.09), var(--surface) 65%);}
+  .card.status-bring{background:linear-gradient(180deg, rgba(242,194,48,.09), var(--surface) 65%);}
+  .card.status-instock{background:linear-gradient(180deg, rgba(90,163,224,.09), var(--surface) 65%);}
+  .card.status-done{background:linear-gradient(180deg, rgba(79,174,106,.09), var(--surface) 65%);}
+  .card.status-paid{background:linear-gradient(180deg, rgba(168,121,224,.09), var(--surface) 65%);}
+
+  /* Точки дней недели по статусу записей этого дня */
+  .day-btn .dot.dot-order{background:var(--red);}
+  .day-btn .dot.dot-bring{background:var(--yellow);}
+  .day-btn .dot.dot-instock{background:var(--blue);}
+  .day-btn .dot.dot-done{background:var(--green);}
+  .day-btn .dot.dot-paid{background:#a879e0;}
+
+  /* Прогноз */
+  .forecast-row{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;}
+  .forecast-card{background:var(--surface-2); border:1px dashed var(--line); border-radius:14px; padding:12px 14px;}
+  .forecast-card .flabel{font-size:10.5px; text-transform:uppercase; color:var(--text-dim); letter-spacing:.04em; margin-bottom:4px;}
+  .forecast-card .fval{font-family:'IBM Plex Mono',monospace; font-size:18px; font-weight:600; color:var(--yellow);}
+  .forecast-card .fhint{font-size:10px; color:var(--text-dim); margin-top:3px;}
+
+  /* Расходы */
+  .expenses-block{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:16px;}
+  .expenses-block h3{font-family:'Oswald',sans-serif; text-transform:uppercase; font-size:13px; margin:0 0 10px; color:var(--text-dim); letter-spacing:.03em; display:flex; justify-content:space-between; align-items:center;}
+  .expenses-block h3 button{background:var(--surface-2); border:1px solid var(--line); color:var(--accent); border-radius:8px; padding:4px 10px; font-size:12px; cursor:pointer; font-family:'Inter',sans-serif;}
+  .expense-row{display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px dashed var(--line); font-size:13px;}
+  .expense-row:last-child{border-bottom:none;}
+  .expense-row .exp-info{color:var(--text-dim); font-size:11px;}
+  .expense-row .exp-amount{font-family:'IBM Plex Mono',monospace; color:var(--red); font-weight:600;}
+  .expense-row .exp-del{color:var(--text-dim); font-size:16px; margin-left:12px; cursor:pointer;}
+  .expenses-total{display:flex; justify-content:space-between; margin-top:8px; padding-top:8px; border-top:1px solid var(--line); font-weight:600; font-size:13px;}
+  .net-card{background:var(--surface); border:1px solid var(--accent-dim); border-radius:14px; padding:14px; margin-bottom:16px; text-align:center;}
+  .net-card .nlabel{font-size:11px; text-transform:uppercase; color:var(--text-dim); letter-spacing:.04em;}
+  .net-card .nval{font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:700; color:var(--green); margin-top:4px;}
+
+  /* Склад: бейдж наличия (используется в карточке записи) */
+  .wh-badge{font-size:10px; text-transform:uppercase; letter-spacing:.04em; padding:3px 9px; border-radius:20px; font-family:'IBM Plex Mono',monospace; display:inline-flex; align-items:center; gap:4px; white-space:nowrap;}
+  .wh-badge.own{background:rgba(79,174,106,.16); color:var(--green);}
+  .wh-badge.available{background:rgba(90,163,224,.16); color:var(--blue);}
+
+  .backup-row{display:flex; gap:8px; margin-top:8px;}
+  .backup-row button{flex:1; background:var(--surface-2); border:1px solid var(--line); color:var(--text); padding:9px; border-radius:9px; font-size:12px; cursor:pointer; font-family:'Inter',sans-serif;}
 </style>
 </head>
 <body>
@@ -319,6 +370,8 @@
       </div>
     </div>
 
+    <div class="forecast-row" id="forecast-row"></div>
+
     <div class="week-nav">
       <button class="wk-arrow" id="s-wk-prev">‹</button>
       <div class="wk-label" id="s-wk-label"></div>
@@ -329,7 +382,7 @@
       <table class="daily" id="salary-table">
         <thead>
           <tr>
-            <th>Дата</th><th>Уст.</th><th>Выручка</th><th>М1 ставка</th><th>Бонус М1</th><th>М1 итого</th><th>М2 ставка</th><th>Бонус М2</th><th>М2 итого</th>
+            <th>Дата</th><th>Уст.</th><th>Прибыль</th><th class="m1-col">М1 ставка</th><th class="m1-col">Бонус М1</th><th class="m1-col">М1 итого</th><th class="m2-col">М2 ставка</th><th class="m2-col">Бонус М2</th><th class="m2-col">М2 итого</th>
           </tr>
         </thead>
         <tbody id="salary-tbody"></tbody>
@@ -337,7 +390,24 @@
       </table>
     </div>
 
+    <div class="expenses-block">
+      <h3>Расходы за неделю <button id="add-expense-btn">➕ Добавить</button></h3>
+      <div id="expenses-list"></div>
+      <div class="expenses-total"><span>Итого расходов</span><span id="expenses-total-val">0 руб</span></div>
+    </div>
+
+    <div class="net-card">
+      <div class="nlabel">Чистыми за неделю (прибыль − расходы)</div>
+      <div class="nval" id="net-total">0 руб</div>
+    </div>
+
     <button class="export-btn" id="export-csv">⬇️ Экспорт недели в CSV</button>
+
+    <div class="backup-row">
+      <button id="export-json">⬇️ Бэкап всех данных</button>
+      <button id="import-json">⬆️ Восстановить из файла</button>
+    </div>
+    <input type="file" id="import-file-input" accept="application/json" style="display:none;">
   </div>
 </div>
 
@@ -389,6 +459,13 @@
             <option>Шатик</option>
           </select>
         </div>
+      </div>
+      <div class="field required">
+        <label><span class="ic">🏷️</span>Наличие</label>
+        <select id="f-wh-status" required>
+          <option value="own">🏠 Своё</option>
+          <option value="available">🚚 Есть у поставщика</option>
+        </select>
       </div>
       <div class="field-row">
         <div class="field required mono">
@@ -457,10 +534,32 @@
   </div>
 </div>
 
+<!-- Expense modal -->
+<div class="overlay" id="expense-overlay">
+  <div class="sheet">
+    <h2><span>Новый расход</span><span class="close" id="expense-close">×</span></h2>
+    <form id="expense-form">
+      <div class="field required">
+        <label><span class="ic">📅</span>Дата</label>
+        <input type="date" id="exp-f-date" required>
+      </div>
+      <div class="field required mono">
+        <label><span class="ic">💸</span>Сумма, руб</label>
+        <input type="number" id="exp-f-amount" placeholder="0" min="0" required>
+      </div>
+      <div class="field">
+        <label><span class="ic">✏️</span>Комментарий</label>
+        <input type="text" id="exp-f-note" placeholder="напр. бензин, инструмент, аренда">
+      </div>
+      <button type="submit" class="save-btn">Сохранить расход</button>
+    </form>
+  </div>
+</div>
+
 <!-- Delete confirm -->
 <div class="overlay" id="confirm-overlay">
   <div class="sheet confirm-sheet">
-    <p class="confirm-text">Удалить эту запись?</p>
+    <p class="confirm-text" id="confirm-text">Удалить эту запись?</p>
     <div class="confirm-actions">
       <button class="confirm-cancel" id="confirm-cancel">Отмена</button>
       <button class="confirm-ok" id="confirm-ok">Удалить</button>
@@ -481,10 +580,31 @@ const MONTHS = ['января','февраля','марта','апреля','м�
 const STORAGE_KEY = 'glass_bookings_v2';
 const SETTINGS_KEY = 'glass_settings_v2';
 const BONUS_KEY = 'glass_bonus_v2';
+const EXPENSES_KEY = 'glass_expenses_v1';
 
 let bookings = [];
 let settings = { m1Fix: 80, m1Rate: 15, m2Guarantee: 50, m2Rate: 20 };
 let bonuses = {}; // key: 'YYYY-Www-m1' style not needed; we do per-week bonus manually entered, persisted per week label
+let expenses = []; // { id, date, amount, note }
+
+/* ---------- Firebase (облачная синхронизация между устройствами) ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyB0aubX7dqqUYXuQrttRRV5uhNVNoOarNA",
+  authDomain: "vlobovik-5eec6.firebaseapp.com",
+  projectId: "vlobovik-5eec6",
+  storageBucket: "vlobovik-5eec6.firebasestorage.app",
+  messagingSenderId: "152652167163",
+  appId: "1:152652167163:web:7798edcf03d243badefd5e",
+  measurementId: "G-Q1SM8VB2KT"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+try{ db.enablePersistence({ synchronizeTabs: true }).catch(()=>{}); }catch(e){}
+
+function bookingsCol(){ return db.collection('bookings'); }
+function expensesCol(){ return db.collection('expenses'); }
+function settingsDoc(){ return db.collection('meta').doc('settings'); }
+function bonusesDoc(){ return db.collection('meta').doc('bonuses'); }
 
 let selectedDate = toISODate(new Date());
 let weekOffset = 0;
@@ -499,33 +619,54 @@ function toISODate(d){
 function pad(n){return n.toString().padStart(2,'0');}
 
 /* ---------- persistence ---------- */
-function loadAll(){
-  try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    bookings = raw ? JSON.parse(raw) : [];
-  }catch(e){ bookings = []; }
+const MIGRATED_KEY = 'glass_migrated_v1';
 
+async function migrateLocalToFirestoreIfNeeded(){
+  if(localStorage.getItem(MIGRATED_KEY)) return;
   try{
-    const rawS = localStorage.getItem(SETTINGS_KEY);
-    if(rawS) settings = Object.assign(settings, JSON.parse(rawS));
-  }catch(e){}
+    const localBookings = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    const localExpenses = JSON.parse(localStorage.getItem(EXPENSES_KEY) || '[]');
+    const localSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
+    const localBonuses = JSON.parse(localStorage.getItem(BONUS_KEY) || 'null');
 
-  try{
-    const rawB = localStorage.getItem(BONUS_KEY);
-    bonuses = rawB ? JSON.parse(rawB) : {};
-  }catch(e){ bonuses = {}; }
+    if(localBookings.length || localExpenses.length || localSettings || localBonuses){
+      const batch = db.batch();
+      localBookings.forEach(b => { if(b && b.id) batch.set(bookingsCol().doc(b.id), b); });
+      localExpenses.forEach(x => { if(x && x.id) batch.set(expensesCol().doc(x.id), x); });
+      if(localSettings) batch.set(settingsDoc(), localSettings, { merge: true });
+      if(localBonuses) batch.set(bonusesDoc(), localBonuses, { merge: true });
+      await batch.commit();
+    }
+    localStorage.setItem(MIGRATED_KEY, '1');
+  }catch(e){
+    console.error('Ошибка миграции старых данных в облако', e);
+  }
+}
 
-  render();
-  renderSalary();
-}
-function persistBookings(){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(bookings)); return true; }catch(e){ return false; }
-}
-function persistSettings(){
-  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); return true; }catch(e){ return false; }
-}
-function persistBonuses(){
-  try{ localStorage.setItem(BONUS_KEY, JSON.stringify(bonuses)); return true; }catch(e){ return false; }
+async function loadAll(){
+  await migrateLocalToFirestoreIfNeeded();
+
+  bookingsCol().onSnapshot(snap => {
+    bookings = snap.docs.map(d => d.data());
+    render();
+    renderSalary();
+  }, () => showToast('Нет связи с облаком — показаны последние сохранённые данные'));
+
+  expensesCol().onSnapshot(snap => {
+    expenses = snap.docs.map(d => d.data());
+    renderExpenses();
+    renderNet();
+  });
+
+  settingsDoc().onSnapshot(snap => {
+    if(snap.exists) settings = Object.assign(settings, snap.data());
+    renderSalary();
+  });
+
+  bonusesDoc().onSnapshot(snap => {
+    bonuses = snap.exists ? snap.data() : {};
+    renderSalary();
+  });
 }
 
 /* ---------- tabs ---------- */
@@ -542,7 +683,7 @@ document.querySelectorAll('.tab').forEach(t => {
 /* ---------- time options ---------- */
 function buildTimeOptions(){
   const opts = [];
-  for(let h=8; h<=20; h++){
+  for(let h=9; h<=20; h++){
     for(let m of [0,30]){
       if(h===20 && m===30) continue;
       opts.push(pad(h)+':'+pad(m));
@@ -583,10 +724,18 @@ function renderWeek(){
     const d = new Date(monday);
     d.setDate(monday.getDate()+i);
     const iso = toISODate(d);
-    const hasBookings = bookings.some(b => b.date === iso);
+    const dayBs = bookings.filter(b => b.date === iso);
+    const hasBookings = dayBs.length > 0;
+    let dotClass = '';
+    if(hasBookings){
+      const priority = ['order','bring','instock','done','paid'];
+      let chosen = dayBs[0].status || 'order';
+      for(const p of priority){ if(dayBs.some(b=>b.status===p)){ chosen = p; break; } }
+      dotClass = ' dot-' + chosen;
+    }
     const btn = document.createElement('div');
     btn.className = 'day-btn' + (iso===selectedDate ? ' active':'') + (iso===todayISO?' today':'') + (hasBookings?' has-bookings':'');
-    btn.innerHTML = `<span class="dow">${DOW[d.getDay()]}</span><span class="dnum">${d.getDate()}</span><span class="dot"></span>`;
+    btn.innerHTML = `<span class="dow">${DOW[d.getDay()]}</span><span class="dnum">${d.getDate()}</span><span class="dot${dotClass}"></span>`;
     btn.onclick = () => { selectedDate = iso; render(); };
     weekEl.appendChild(btn);
   }
@@ -639,6 +788,7 @@ function renderList(){
       <div class="tags">
         <span class="tag euro">🔎 ${escapeHtml(b.euro)}</span>
         <span class="tag wh">📦 ${escapeHtml(b.wh)}</span>
+        ${b.whStatus ? `<span class="wh-badge ${b.whStatus==='own'?'own':'available'}">${b.whStatus==='own'?'🏠 Своё':'🚚 Есть'}</span>` : ''}
       </div>
       <div class="row-bottom">
         <div class="phone">📞 <a href="tel:${escapeHtml((b.phoneCode||'')+(b.phoneNum||''))}">${escapeHtml((b.phoneCode||''))} ${escapeHtml(b.phoneNum||'')}</a></div>
@@ -654,7 +804,7 @@ function renderList(){
       </div>
     `;
     card.querySelector('.edit').onclick = () => openSheet(b);
-    card.querySelector('.del').onclick = () => askDelete(b.id);
+    card.querySelector('.del').onclick = () => askDelete(b.id, 'booking');
     listEl.appendChild(card);
   }
 }
@@ -678,6 +828,7 @@ function openSheet(b){
   document.getElementById('f-car').value = b ? b.car : '';
   document.getElementById('f-euro').value = b ? b.euro : '';
   document.getElementById('f-wh').value = b ? b.wh : '';
+  document.getElementById('f-wh-status').value = b ? (b.whStatus||'own') : 'own';
   document.getElementById('f-phone-code').value = b ? (b.phoneCode||'') : '';
   document.getElementById('f-phone-num').value = b ? (b.phoneNum||'') : '';
   document.getElementById('f-buy').value = b ? (b.buy||'') : '';
@@ -700,8 +851,12 @@ function showToast(msg){
 }
 
 let pendingDeleteId = null;
-function askDelete(id){
+let pendingDeleteType = 'booking';
+function askDelete(id, type){
   pendingDeleteId = id;
+  pendingDeleteType = type || 'booking';
+  document.getElementById('confirm-text').textContent =
+    pendingDeleteType === 'expense' ? 'Удалить этот расход?' : 'Удалить эту запись?';
   document.getElementById('confirm-overlay').classList.add('open');
 }
 function closeConfirm(){
@@ -710,13 +865,20 @@ function closeConfirm(){
 }
 document.getElementById('confirm-cancel').onclick = closeConfirm;
 document.getElementById('confirm-overlay').onclick = (e) => { if(e.target.id==='confirm-overlay') closeConfirm(); };
-document.getElementById('confirm-ok').onclick = () => {
+document.getElementById('confirm-ok').onclick = async () => {
   if(pendingDeleteId){
-    bookings = bookings.filter(x=>x.id!==pendingDeleteId);
-    persistBookings();
+    const id = pendingDeleteId;
+    const type = pendingDeleteType;
     closeConfirm();
-    render();
-    renderSalary();
+    try{
+      if(type === 'expense'){
+        await expensesCol().doc(id).delete();
+      } else {
+        await bookingsCol().doc(id).delete();
+      }
+    }catch(e){
+      showToast('Не удалось удалить — проверьте интернет-соединение');
+    }
   }
 };
 
@@ -734,6 +896,7 @@ document.getElementById('form').onsubmit = async (e) => {
   const car = document.getElementById('f-car').value.trim();
   const euro = document.getElementById('f-euro').value.trim();
   const wh = document.getElementById('f-wh').value;
+  const whStatus = document.getElementById('f-wh-status').value;
 
   if(!phoneCode || !phoneNum || !date || !time || !post || !car || !euro || !wh){
     document.getElementById('form-err').classList.add('show');
@@ -744,7 +907,7 @@ document.getElementById('form').onsubmit = async (e) => {
     id: editingId || (Date.now().toString(36) + Math.random().toString(36).slice(2,7)),
     date, time,
     post,
-    car, euro, wh, phoneCode, phoneNum,
+    car, euro, wh, whStatus, phoneCode, phoneNum,
     buy: document.getElementById('f-buy').value,
     sell: document.getElementById('f-sell').value,
     status: document.getElementById('f-status').value
@@ -754,18 +917,13 @@ document.getElementById('form').onsubmit = async (e) => {
   saveBtn.textContent = 'Сохранение…';
   saveBtn.disabled = true;
 
-  const idx = bookings.findIndex(x=>x.id===b.id);
-  if(idx>=0) bookings[idx] = b; else bookings.push(b);
   selectedDate = date;
 
-  const ok = persistBookings();
-
-  closeSheet();
-  render();
-  renderSalary();
-
-  if(!ok){
-    showToast('Запись сохранена только в этом сеансе — память устройства недоступна.');
+  try{
+    await bookingsCol().doc(b.id).set(b);
+    closeSheet();
+  }catch(e){
+    showToast('Не удалось сохранить — проверьте интернет-соединение');
   }
 
   saveBtn.textContent = 'Сохранить запись';
@@ -782,15 +940,19 @@ document.getElementById('open-settings').onclick = () => {
 };
 document.getElementById('close-settings').onclick = () => document.getElementById('settings-overlay').classList.remove('open');
 document.getElementById('settings-overlay').onclick = (e) => { if(e.target.id==='settings-overlay') document.getElementById('settings-overlay').classList.remove('open'); };
-document.getElementById('save-settings').onclick = () => {
+document.getElementById('save-settings').onclick = async () => {
   settings.m1Fix = Number(document.getElementById('set-m1-fix').value) || 0;
   settings.m1Rate = Number(document.getElementById('set-m1-rate').value) || 0;
   settings.m2Guarantee = Number(document.getElementById('set-m2-guarantee').value) || 0;
   settings.m2Rate = Number(document.getElementById('set-m2-rate').value) || 0;
-  persistSettings();
+  try{
+    await settingsDoc().set(settings, { merge: true });
+    showToast('Настройки сохранены и синхронизированы');
+  }catch(e){
+    showToast('Не удалось синхронизировать — проверьте интернет');
+  }
   document.getElementById('settings-overlay').classList.remove('open');
   renderSalary();
-  showToast('Настройки сохранены');
 };
 
 /* ---------- SALARY VIEW ---------- */
@@ -799,16 +961,17 @@ document.getElementById('s-wk-next').onclick = () => { salaryWeekOffset += 1; re
 
 function calcDaySalary(dayBookings){
   // Both masters install glasses together — pay is based on the same daily install count.
-  let count = 0, revenue = 0;
+  // Считаем ПРИБЫЛЬ (цена клиенту − цена закупки), а не полную выручку.
+  let count = 0, profit = 0;
   for(const b of dayBookings){
-    revenue += Number(b.sell) || 0;
+    profit += (Number(b.sell) || 0) - (Number(b.buy) || 0);
     count++;
   }
   const m1Deal = count * settings.m1Rate;
   const m2Deal = count * settings.m2Rate;
   const m1Base = count > 0 ? settings.m1Fix + m1Deal : 0;
   const m2Base = count > 0 ? Math.max(settings.m2Guarantee, m2Deal) : 0;
-  return { count, revenue, m1Deal, m2Deal, m1Base, m2Base };
+  return { count, profit, m1Deal, m2Deal, m1Base, m2Base };
 }
 
 function renderSalary(){
@@ -819,7 +982,7 @@ function renderSalary(){
   const tfoot = document.getElementById('salary-tfoot');
   tbody.innerHTML = '';
 
-  let wkM1Base=0, wkM2Base=0, wkM1Bonus=0, wkM2Bonus=0, wkRevenue=0, wkInstalls=0;
+  let wkM1Base=0, wkM2Base=0, wkM1Bonus=0, wkM2Bonus=0, wkProfit=0, wkInstalls=0;
   const todayISO = toISODate(new Date());
 
   for(let i=0;i<7;i++){
@@ -833,23 +996,23 @@ function renderSalary(){
 
     wkM1Base += s.m1Base; wkM2Base += s.m2Base;
     wkM1Bonus += b1; wkM2Bonus += b2;
-    wkRevenue += s.revenue; wkInstalls += s.count;
+    wkProfit += s.profit; wkInstalls += s.count;
 
     const tr = document.createElement('tr');
     if(iso===todayISO) tr.classList.add('today-col');
     tr.innerHTML = `<td>${pad(d.getDate())}.${pad(d.getMonth()+1)} ${DOW[d.getDay()]}</td>
       <td>${s.count || '—'}</td>
-      <td>${s.revenue || '—'}</td>
-      <td>${s.m1Base || '—'}</td>
-      <td><input type="number" inputmode="numeric" class="bonus-input" data-date="${iso}" data-master="m1" value="${b1||''}" placeholder="0"></td>
-      <td id="tot-${iso}-m1">${s.m1Base + b1 || '—'}</td>
-      <td>${s.m2Base || '—'}</td>
-      <td><input type="number" inputmode="numeric" class="bonus-input" data-date="${iso}" data-master="m2" value="${b2||''}" placeholder="0"></td>
-      <td id="tot-${iso}-m2">${s.m2Base + b2 || '—'}</td>`;
+      <td>${s.profit || '—'}</td>
+      <td class="m1-col">${s.m1Base || '—'}</td>
+      <td class="m1-col"><input type="number" inputmode="numeric" class="bonus-input" data-date="${iso}" data-master="m1" value="${b1||''}" placeholder="0"></td>
+      <td class="m1-col" id="tot-${iso}-m1">${s.m1Base + b1 || '—'}</td>
+      <td class="m2-col">${s.m2Base || '—'}</td>
+      <td class="m2-col"><input type="number" inputmode="numeric" class="bonus-input" data-date="${iso}" data-master="m2" value="${b2||''}" placeholder="0"></td>
+      <td class="m2-col" id="tot-${iso}-m2">${s.m2Base + b2 || '—'}</td>`;
     tbody.appendChild(tr);
   }
 
-  tfoot.innerHTML = `<tr><td>Итого</td><td>${wkInstalls}</td><td>${wkRevenue}</td><td>${wkM1Base}</td><td id="foot-m1bonus">${wkM1Bonus}</td><td id="foot-m1total">${wkM1Base+wkM1Bonus}</td><td>${wkM2Base}</td><td id="foot-m2bonus">${wkM2Bonus}</td><td id="foot-m2total">${wkM2Base+wkM2Bonus}</td></tr>`;
+  tfoot.innerHTML = `<tr><td>Итого</td><td>${wkInstalls}</td><td>${wkProfit}</td><td class="m1-col">${wkM1Base}</td><td class="m1-col" id="foot-m1bonus">${wkM1Bonus}</td><td class="m1-col" id="foot-m1total">${wkM1Base+wkM1Bonus}</td><td class="m2-col">${wkM2Base}</td><td class="m2-col" id="foot-m2bonus">${wkM2Bonus}</td><td class="m2-col" id="foot-m2total">${wkM2Base+wkM2Bonus}</td></tr>`;
 
   document.getElementById('m1-total').innerHTML = `${wkM1Base+wkM1Bonus} <span>руб</span>`;
   document.getElementById('m2-total').innerHTML = `${wkM2Base+wkM2Bonus} <span>руб</span>`;
@@ -864,13 +1027,138 @@ function renderSalary(){
       const iso = e.target.dataset.date;
       const m = e.target.dataset.master;
       const val = Number(e.target.value) || 0;
-      if(val === 0) delete bonuses[iso+':'+m];
-      else bonuses[iso+':'+m] = val;
-      persistBonuses();
+      const key = iso+':'+m;
+      if(val === 0) delete bonuses[key];
+      else bonuses[key] = val;
       updateSalaryTotals();
+
+      clearTimeout(inp._syncTimer);
+      inp._syncTimer = setTimeout(() => {
+        const update = {};
+        update[key] = val === 0 ? firebase.firestore.FieldValue.delete() : val;
+        bonusesDoc().set(update, { merge: true }).catch(()=>{
+          showToast('Бонус не синхронизирован — проверьте интернет');
+        });
+      }, 500);
     });
   });
+
+  renderForecast();
+  renderExpenses();
+  renderNet();
 }
+
+/* ---------- Прогноз ---------- */
+function renderForecast(){
+  const box = document.getElementById('forecast-row');
+  if(!box) return;
+  if(salaryWeekOffset !== 0){
+    box.innerHTML = ''; // прогноз показываем только для текущей недели
+    return;
+  }
+  const monday = getWeekMonday(0);
+  const todayISO = toISODate(new Date());
+  let daysPassed = 0, profitSoFar = 0, salarySoFar = 0;
+  for(let i=0;i<7;i++){
+    const d = new Date(monday); d.setDate(monday.getDate()+i);
+    const iso = toISODate(d);
+    if(iso > todayISO) continue;
+    daysPassed++;
+    const s = calcDaySalary(bookings.filter(x=>x.date===iso));
+    const b1 = Number(bonuses[iso+':m1'])||0;
+    const b2 = Number(bonuses[iso+':m2'])||0;
+    profitSoFar += s.profit;
+    salarySoFar += (s.m1Base+b1) + (s.m2Base+b2);
+  }
+  if(daysPassed === 0) daysPassed = 1;
+  const forecastProfit = Math.round((profitSoFar / daysPassed) * 7);
+  const forecastSalary = Math.round((salarySoFar / daysPassed) * 7);
+  box.innerHTML = `
+    <div class="forecast-card">
+      <div class="flabel">📈 Прогноз прибыли (неделя)</div>
+      <div class="fval">${forecastProfit} руб</div>
+      <div class="fhint">по среднему за ${daysPassed} дн.</div>
+    </div>
+    <div class="forecast-card">
+      <div class="flabel">💼 Прогноз ЗП (М1+М2)</div>
+      <div class="fval">${forecastSalary} руб</div>
+      <div class="fhint">по среднему за ${daysPassed} дн.</div>
+    </div>`;
+}
+
+/* ---------- Расходы ---------- */
+function weekDates(monday){
+  const days = [];
+  for(let i=0;i<7;i++){ const d=new Date(monday); d.setDate(monday.getDate()+i); days.push(toISODate(d)); }
+  return days;
+}
+function weekExpenses(monday){
+  const days = weekDates(monday);
+  return expenses.filter(e => days.includes(e.date)).sort((a,b)=>a.date.localeCompare(b.date));
+}
+function renderExpenses(){
+  const monday = getWeekMonday(salaryWeekOffset);
+  const list = weekExpenses(monday);
+  const listEl = document.getElementById('expenses-list');
+  if(!listEl) return;
+
+  if(list.length === 0){
+    listEl.innerHTML = '<div style="color:var(--text-dim); font-size:12px; padding:6px 0;">Расходов на этой неделе нет</div>';
+  } else {
+    listEl.innerHTML = list.map(e => {
+      const d = new Date(e.date+'T00:00:00');
+      return `<div class="expense-row">
+        <div><div>${escapeHtml(e.note||'Расход')}</div><div class="exp-info">${pad(d.getDate())}.${pad(d.getMonth()+1)}</div></div>
+        <div style="display:flex; align-items:center;"><span class="exp-amount">-${e.amount}</span><span class="exp-del" data-id="${e.id}">✕</span></div>
+      </div>`;
+    }).join('');
+    listEl.querySelectorAll('.exp-del').forEach(btn=>{
+      btn.onclick = () => askDelete(btn.dataset.id, 'expense');
+    });
+  }
+
+  const total = list.reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+  document.getElementById('expenses-total-val').textContent = total + ' руб';
+}
+
+function renderNet(){
+  const monday = getWeekMonday(salaryWeekOffset);
+  let wkProfit = 0;
+  for(const iso of weekDates(monday)){
+    const s = calcDaySalary(bookings.filter(x=>x.date===iso));
+    wkProfit += s.profit;
+  }
+  const expTotal = weekExpenses(monday).reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+  const net = wkProfit - expTotal;
+  const el = document.getElementById('net-total');
+  if(el){
+    el.textContent = net + ' руб';
+    el.style.color = net < 0 ? 'var(--red)' : 'var(--green)';
+  }
+}
+
+document.getElementById('add-expense-btn').onclick = () => {
+  document.getElementById('exp-f-date').value = toISODate(new Date());
+  document.getElementById('exp-f-amount').value = '';
+  document.getElementById('exp-f-note').value = '';
+  document.getElementById('expense-overlay').classList.add('open');
+};
+document.getElementById('expense-close').onclick = () => document.getElementById('expense-overlay').classList.remove('open');
+document.getElementById('expense-overlay').onclick = (e) => { if(e.target.id==='expense-overlay') document.getElementById('expense-overlay').classList.remove('open'); };
+document.getElementById('expense-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const date = document.getElementById('exp-f-date').value;
+  const amount = Number(document.getElementById('exp-f-amount').value) || 0;
+  const note = document.getElementById('exp-f-note').value.trim();
+  if(!date || !amount) return;
+  const item = { id: Date.now().toString(36)+Math.random().toString(36).slice(2,7), date, amount, note };
+  try{
+    await expensesCol().doc(item.id).set(item);
+    document.getElementById('expense-overlay').classList.remove('open');
+  }catch(err){
+    showToast('Не удалось сохранить расход — проверьте интернет');
+  }
+};
 
 /* Пересчитывает и точечно обновляет только цифры итогов, не трогая поля ввода (чтобы не терять фокус при вводе) */
 function updateSalaryTotals(){
@@ -910,12 +1198,14 @@ function updateSalaryTotals(){
     `Ставка за неделю: ${wkM1Base} руб<br>Бонусы за неделю: +${wkM1Bonus} руб`;
   document.getElementById('m2-breakdown').innerHTML =
     `Ставка за неделю: ${wkM2Base} руб<br>Бонусы за неделю: +${wkM2Bonus} руб`;
+
+  renderForecast();
 }
 
 /* ---------- CSV export ---------- */
 document.getElementById('export-csv').onclick = () => {
   const monday = getWeekMonday(salaryWeekOffset);
-  const rows = [['Дата','Установок','Выручка','М1_ставка','Бонус_М1','М1_итого','М2_ставка','Бонус_М2','М2_итого']];
+  const rows = [['Дата','Установок','Прибыль','М1_ставка','Бонус_М1','М1_итого','М2_ставка','Бонус_М2','М2_итого']];
   for(let i=0;i<7;i++){
     const d = new Date(monday);
     d.setDate(monday.getDate()+i);
@@ -924,7 +1214,7 @@ document.getElementById('export-csv').onclick = () => {
     const s = calcDaySalary(dayBookings);
     const b1 = Number(bonuses[iso+':m1']) || 0;
     const b2 = Number(bonuses[iso+':m2']) || 0;
-    rows.push([iso, s.count, s.revenue, s.m1Base, b1, s.m1Base+b1, s.m2Base, b2, s.m2Base+b2]);
+    rows.push([iso, s.count, s.profit, s.m1Base, b1, s.m1Base+b1, s.m2Base, b2, s.m2Base+b2]);
   }
   const csv = rows.map(r => r.join(';')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8;'});
@@ -934,6 +1224,43 @@ document.getElementById('export-csv').onclick = () => {
   a.download = `зарплата_${toISODate(monday)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+};
+
+/* ---------- Бэкап: экспорт / импорт всех данных ---------- */
+document.getElementById('export-json').onclick = () => {
+  const data = { bookings, settings, bonuses, expenses, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `stekla-backup_${toISODate(new Date())}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Файл с бэкапом сохранён');
+};
+document.getElementById('import-json').onclick = () => {
+  document.getElementById('import-file-input').click();
+};
+document.getElementById('import-file-input').onchange = (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try{
+      const data = JSON.parse(reader.result);
+      const batch = db.batch();
+      if(Array.isArray(data.bookings)) data.bookings.forEach(b => { if(b && b.id) batch.set(bookingsCol().doc(b.id), b); });
+      if(Array.isArray(data.expenses)) data.expenses.forEach(x => { if(x && x.id) batch.set(expensesCol().doc(x.id), x); });
+      if(data.settings) batch.set(settingsDoc(), data.settings, { merge: true });
+      if(data.bonuses) batch.set(bonusesDoc(), data.bonuses, { merge: true });
+      await batch.commit();
+      showToast('Данные успешно импортированы и синхронизированы');
+    }catch(err){
+      showToast('Не удалось прочитать файл — проверьте формат');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
 };
 
 /* ---------- init ---------- */
