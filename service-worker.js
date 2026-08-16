@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stekla-uchet-v2';
+const CACHE_NAME = 'stekla-uchet-v5';
 const ASSETS = [
   './index.html',
   './manifest.json',
