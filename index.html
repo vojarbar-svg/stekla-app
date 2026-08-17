@@ -1067,23 +1067,26 @@ function renderForecast(){
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const todayNum = now.getDate();
 
-  let daysPassed = 0, profitSoFar = 0, salarySoFar = 0;
+  let daysPassed = 0, netSoFar = 0, salarySoFar = 0;
   for(let day = 1; day <= todayNum; day++){
     const iso = toISODate(new Date(year, month, day));
     daysPassed++;
     const s = calcDaySalary(bookings.filter(x=>x.date===iso));
     const b1 = Number(bonuses[iso+':m1'])||0;
     const b2 = Number(bonuses[iso+':m2'])||0;
-    profitSoFar += s.profit;
-    salarySoFar += (s.m1Base+b1) + (s.m2Base+b2);
+    const dayExp = expenses.filter(e=>e.date===iso).reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+    const dayM1 = s.m1Base + b1;
+    const dayM2 = s.m2Base + b2;
+    netSoFar += (s.profit - dayExp - dayM1 - dayM2);
+    salarySoFar += dayM1 + dayM2;
   }
   if(daysPassed === 0) daysPassed = 1;
-  const forecastProfit = Math.round((profitSoFar / daysPassed) * daysInMonth);
+  const forecastNet = Math.round((netSoFar / daysPassed) * daysInMonth);
   const forecastSalary = Math.round((salarySoFar / daysPassed) * daysInMonth);
   box.innerHTML = `
     <div class="forecast-card">
-      <div class="flabel">📈 Прогноз прибыли (месяц)</div>
-      <div class="fval">${forecastProfit} руб</div>
+      <div class="flabel">📈 Прогноз чистыми (месяц)</div>
+      <div class="fval" style="${forecastNet<0?'color:var(--red);':''}">${forecastNet} руб</div>
       <div class="fhint">по среднему за ${daysPassed} из ${daysInMonth} дн.</div>
     </div>
     <div class="forecast-card">
