@@ -378,7 +378,7 @@
       <table class="daily" id="salary-table">
         <thead>
           <tr>
-            <th>Дата</th><th>Уст.</th><th>Прибыль</th><th class="m1-col">М1 ставка</th><th class="m1-col">Бонус М1</th><th class="m1-col">М1 итого</th><th class="m2-col">М2 ставка</th><th class="m2-col">Бонус М2</th><th class="m2-col">М2 итого</th>
+            <th>Дата</th><th>Уст.</th><th>Чистыми</th><th class="m1-col">М1 ставка</th><th class="m1-col">Бонус М1</th><th class="m1-col">М1 итого</th><th class="m2-col">М2 ставка</th><th class="m2-col">Бонус М2</th><th class="m2-col">М2 итого</th>
           </tr>
         </thead>
         <tbody id="salary-tbody"></tbody>
@@ -985,7 +985,7 @@ function renderSalary(){
   const tfoot = document.getElementById('salary-tfoot');
   tbody.innerHTML = '';
 
-  let wkM1Base=0, wkM2Base=0, wkM1Bonus=0, wkM2Bonus=0, wkProfit=0, wkInstalls=0;
+  let wkM1Base=0, wkM2Base=0, wkM1Bonus=0, wkM2Bonus=0, wkProfit=0, wkInstalls=0, wkNet=0;
   const todayISO = toISODate(new Date());
 
   for(let i=0;i<7;i++){
@@ -996,16 +996,21 @@ function renderSalary(){
     const s = calcDaySalary(dayBookings);
     const b1 = Number(bonuses[iso+':m1']) || 0;
     const b2 = Number(bonuses[iso+':m2']) || 0;
+    const dayExp = expenses.filter(e=>e.date===iso).reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+    const dayM1 = s.m1Base + b1;
+    const dayM2 = s.m2Base + b2;
+    const dayNet = s.profit - dayExp - dayM1 - dayM2;
 
     wkM1Base += s.m1Base; wkM2Base += s.m2Base;
     wkM1Bonus += b1; wkM2Bonus += b2;
     wkProfit += s.profit; wkInstalls += s.count;
+    wkNet += (s.count > 0 ? dayNet : 0);
 
     const tr = document.createElement('tr');
     if(iso===todayISO) tr.classList.add('today-col');
     tr.innerHTML = `<td>${pad(d.getDate())}.${pad(d.getMonth()+1)} ${DOW[d.getDay()]}</td>
       <td>${s.count || '—'}</td>
-      <td>${s.profit || '—'}</td>
+      <td id="net-${iso}" style="${dayNet<0 && s.count>0 ? 'color:var(--red);' : ''}">${s.count>0 ? dayNet : '—'}</td>
       <td class="m1-col">${s.m1Base || '—'}</td>
       <td class="m1-col"><input type="number" inputmode="numeric" class="bonus-input" data-date="${iso}" data-master="m1" value="${b1||''}" placeholder="0"></td>
       <td class="m1-col" id="tot-${iso}-m1">${s.m1Base + b1 || '—'}</td>
@@ -1015,7 +1020,7 @@ function renderSalary(){
     tbody.appendChild(tr);
   }
 
-  tfoot.innerHTML = `<tr><td>Итого</td><td>${wkInstalls}</td><td>${wkProfit}</td><td class="m1-col">${wkM1Base}</td><td class="m1-col" id="foot-m1bonus">${wkM1Bonus}</td><td class="m1-col" id="foot-m1total">${wkM1Base+wkM1Bonus}</td><td class="m2-col">${wkM2Base}</td><td class="m2-col" id="foot-m2bonus">${wkM2Bonus}</td><td class="m2-col" id="foot-m2total">${wkM2Base+wkM2Bonus}</td></tr>`;
+  tfoot.innerHTML = `<tr><td>Итого</td><td>${wkInstalls}</td><td id="foot-net">${wkNet}</td><td class="m1-col">${wkM1Base}</td><td class="m1-col" id="foot-m1bonus">${wkM1Bonus}</td><td class="m1-col" id="foot-m1total">${wkM1Base+wkM1Bonus}</td><td class="m2-col">${wkM2Base}</td><td class="m2-col" id="foot-m2bonus">${wkM2Bonus}</td><td class="m2-col" id="foot-m2total">${wkM2Base+wkM2Bonus}</td></tr>`;
 
   document.getElementById('m1-total').innerHTML = `${wkM1Base+wkM1Bonus} <span>руб</span>`;
   document.getElementById('m2-total').innerHTML = `${wkM2Base+wkM2Bonus} <span>руб</span>`;
@@ -1173,7 +1178,7 @@ document.getElementById('expense-form').onsubmit = async (e) => {
 /* Пересчитывает и точечно обновляет только цифры итогов, не трогая поля ввода (чтобы не терять фокус при вводе) */
 function updateSalaryTotals(){
   const monday = getWeekMonday(salaryWeekOffset);
-  let wkM1Base=0, wkM2Base=0, wkM1Bonus=0, wkM2Bonus=0;
+  let wkM1Base=0, wkM2Base=0, wkM1Bonus=0, wkM2Bonus=0, wkNet=0;
 
   for(let i=0;i<7;i++){
     const d = new Date(monday);
@@ -1183,24 +1188,34 @@ function updateSalaryTotals(){
     const s = calcDaySalary(dayBookings);
     const b1 = Number(bonuses[iso+':m1']) || 0;
     const b2 = Number(bonuses[iso+':m2']) || 0;
+    const dayExp = expenses.filter(e=>e.date===iso).reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+    const dayNet = s.profit - dayExp - (s.m1Base+b1) - (s.m2Base+b2);
 
     wkM1Base += s.m1Base; wkM2Base += s.m2Base;
     wkM1Bonus += b1; wkM2Bonus += b2;
+    wkNet += (s.count > 0 ? dayNet : 0);
 
     const c1 = document.getElementById(`tot-${iso}-m1`);
     const c2 = document.getElementById(`tot-${iso}-m2`);
+    const cn = document.getElementById(`net-${iso}`);
     if(c1) c1.textContent = (s.m1Base + b1) || '—';
     if(c2) c2.textContent = (s.m2Base + b2) || '—';
+    if(cn){
+      cn.textContent = s.count>0 ? dayNet : '—';
+      cn.style.color = (dayNet<0 && s.count>0) ? 'var(--red)' : '';
+    }
   }
 
   const fb1 = document.getElementById('foot-m1bonus');
   const ft1 = document.getElementById('foot-m1total');
   const fb2 = document.getElementById('foot-m2bonus');
   const ft2 = document.getElementById('foot-m2total');
+  const fn = document.getElementById('foot-net');
   if(fb1) fb1.textContent = wkM1Bonus;
   if(ft1) ft1.textContent = wkM1Base + wkM1Bonus;
   if(fb2) fb2.textContent = wkM2Bonus;
   if(ft2) ft2.textContent = wkM2Base + wkM2Bonus;
+  if(fn) fn.textContent = wkNet;
 
   document.getElementById('m1-total').innerHTML = `${wkM1Base+wkM1Bonus} <span>руб</span>`;
   document.getElementById('m2-total').innerHTML = `${wkM2Base+wkM2Bonus} <span>руб</span>`;
@@ -1210,12 +1225,13 @@ function updateSalaryTotals(){
     `Ставка за неделю: ${wkM2Base} руб<br>Бонусы за неделю: +${wkM2Bonus} руб`;
 
   renderForecast();
+  renderNet();
 }
 
 /* ---------- CSV export ---------- */
 document.getElementById('export-csv').onclick = () => {
   const monday = getWeekMonday(salaryWeekOffset);
-  const rows = [['Дата','Установок','Прибыль','М1_ставка','Бонус_М1','М1_итого','М2_ставка','Бонус_М2','М2_итого']];
+  const rows = [['Дата','Установок','Прибыль','Расходы','Чистыми','М1_ставка','Бонус_М1','М1_итого','М2_ставка','Бонус_М2','М2_итого']];
   for(let i=0;i<7;i++){
     const d = new Date(monday);
     d.setDate(monday.getDate()+i);
@@ -1224,7 +1240,9 @@ document.getElementById('export-csv').onclick = () => {
     const s = calcDaySalary(dayBookings);
     const b1 = Number(bonuses[iso+':m1']) || 0;
     const b2 = Number(bonuses[iso+':m2']) || 0;
-    rows.push([iso, s.count, s.profit, s.m1Base, b1, s.m1Base+b1, s.m2Base, b2, s.m2Base+b2]);
+    const dayExp = expenses.filter(e=>e.date===iso).reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+    const dayNet = s.profit - dayExp - (s.m1Base+b1) - (s.m2Base+b2);
+    rows.push([iso, s.count, s.profit, dayExp, dayNet, s.m1Base, b1, s.m1Base+b1, s.m2Base, b2, s.m2Base+b2]);
   }
   const csv = rows.map(r => r.join(';')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8;'});
