@@ -393,7 +393,7 @@
     </div>
 
     <div class="net-card">
-      <div class="nlabel">Чистыми за неделю (прибыль − расходы − ЗП мастеров)</div>
+      <div class="nlabel">Чистыми за текущий месяц (прибыль − расходы − ЗП мастеров)</div>
       <div class="nval" id="net-total">0 руб</div>
       <div class="fhint" id="net-hint" style="margin-top:6px;"></div>
     </div>
@@ -1132,18 +1132,23 @@ function renderExpenses(){
 }
 
 function renderNet(){
-  const monday = getWeekMonday(salaryWeekOffset);
-  let wkProfit = 0, wkM1Total = 0, wkM2Total = 0;
-  for(const iso of weekDates(monday)){
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  let mProfit = 0, mM1Total = 0, mM2Total = 0, mExp = 0;
+  for(let day = 1; day <= daysInMonth; day++){
+    const iso = toISODate(new Date(year, month, day));
     const s = calcDaySalary(bookings.filter(x=>x.date===iso));
-    wkProfit += s.profit;
+    mProfit += s.profit;
     const b1 = Number(bonuses[iso+':m1']) || 0;
     const b2 = Number(bonuses[iso+':m2']) || 0;
-    wkM1Total += s.m1Base + b1;
-    wkM2Total += s.m2Base + b2;
+    mM1Total += s.m1Base + b1;
+    mM2Total += s.m2Base + b2;
+    mExp += expenses.filter(e=>e.date===iso).reduce((sum,e)=>sum+(Number(e.amount)||0),0);
   }
-  const expTotal = weekExpenses(monday).reduce((sum,e)=>sum+(Number(e.amount)||0),0);
-  const net = wkProfit - expTotal - wkM1Total - wkM2Total;
+  const net = mProfit - mExp - mM1Total - mM2Total;
   const el = document.getElementById('net-total');
   if(el){
     el.textContent = net + ' руб';
@@ -1151,7 +1156,7 @@ function renderNet(){
   }
   const hint = document.getElementById('net-hint');
   if(hint){
-    hint.textContent = `Прибыль ${wkProfit} − Расходы ${expTotal} − ЗП М1 ${wkM1Total} − ЗП М2 ${wkM2Total}`;
+    hint.textContent = `Прибыль ${mProfit} − Расходы ${mExp} − ЗП М1 ${mM1Total} − ЗП М2 ${mM2Total}`;
   }
 }
 
